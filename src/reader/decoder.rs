@@ -198,41 +198,34 @@ impl StreamingDecoder {
     /// and the last decoding result.
     pub fn update<'a>(&'a mut self, mut buf: &[u8])
     -> Result<(usize, Decoded<'a>), DecodingError> {
-        // NOTE: Do not change the function signature without double-checking the
-        //       unsafe block!
         let len = buf.len();
-        while buf.len() > 0 && self.state.is_some() {
+        //while buf.len() > 0 && self.state.is_some() {
+        let return_value = loop {
+            {
+                if buf.len() == 0 || self.state.is_none() {
+                    break Option::None;
+                }
+            }
             match self.next_state(buf) {
                 Ok((bytes, Decoded::Nothing)) => {
                     buf = &buf[bytes..]
                 }
                 Ok((bytes, Decoded::Trailer)) => {
                     buf = &buf[bytes..];
-                    break
+                    break Option::None;
                 }
                 Ok((bytes, result)) => {
                     buf = &buf[bytes..];
-                    return Ok(
-                        (len-buf.len(), 
-                        // This transmute just casts the lifetime away. Since Rust only 
-                        // has SESE regions, this early return cannot be worked out and
-                        // such that the borrow region of self includes the whole block.
-                        // The explixit lifetimes in the function signature ensure that
-                        // this is safe.
-                        // ### NOTE
-                        // To check that everything is sound, return the result without
-                        // the match (e.g. `return Ok(self.next_state(buf)?)`). If
-                        // it compiles the returned lifetime is correct.
-                        unsafe { 
-                            mem::transmute::<Decoded, Decoded>(result)
-                        }
-                    ))
+                    let new_len = len-buf.len();
+                    break Option::Some((new_len, result));
                 }
                 Err(err) => return Err(err)
             }
+        };
+        match return_value {
+            Option::Some(x) => Ok(x),
+            Option::None => Ok((len-buf.len(), Decoded::Nothing))
         }
-        Ok((len-buf.len(), Decoded::Nothing))
-        
     }
     
     /// Returns the data of the last extension that has been decoded.
