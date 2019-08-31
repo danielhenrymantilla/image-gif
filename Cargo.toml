@@ -24,6 +24,7 @@ glob = "0.3"
 
 [features]
 default = ["raii_no_panic"]
+polonius = []
 
 raii_no_panic = []
 c_api = ["libc"]

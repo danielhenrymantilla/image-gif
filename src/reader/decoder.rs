@@ -196,36 +196,65 @@ impl StreamingDecoder {
     ///
     /// Returns the number of bytes consumed from the input buffer 
     /// and the last decoding result.
-    pub fn update<'a>(&'a mut self, mut buf: &[u8])
-    -> Result<(usize, Decoded<'a>), DecodingError> {
+    pub
+    fn update<'a> (
+        self: &'a mut Self,
+        mut buf: &'_ [u8],
+    )   -> Result<
+            (usize, Decoded<'a>),
+            DecodingError,
+        >
+    {
         let len = buf.len();
         //while buf.len() > 0 && self.state.is_some() {
-        let return_value = loop {
+        loop {
             {
                 if buf.len() == 0 || self.state.is_none() {
-                    break Option::None;
+                    break;
                 }
             }
             match self.next_state(buf) {
                 Ok((bytes, Decoded::Nothing)) => {
-                    buf = &buf[bytes..]
+                    buf = &buf[bytes ..]
                 }
                 Ok((bytes, Decoded::Trailer)) => {
                     buf = &buf[bytes..];
-                    break Option::None;
+                    break;
                 }
                 Ok((bytes, result)) => {
-                    buf = &buf[bytes..];
-                    let new_len = len-buf.len();
-                    break Option::Some((new_len, result));
+                    buf = &buf[bytes ..];
+                    let new_len = len - buf.len();
+                    #[cfg(not(feature = "polonius"))]
+                    let result = unsafe {
+                        /// ```rust
+                        /// assert!(
+                        ///     ::std::process::Command::new("cargo")
+                        ///         .arg("+nightly")
+                        ///         .arg("rustc")
+                        ///         .arg("--features")
+                        ///         .arg("polonius")
+                        ///         .arg("--")
+                        ///         .arg("-Zpolonius")
+                        ///         .status()
+                        ///         .unwrap()
+                        ///         .success()
+                        /// );
+                        /// ```
+                        mod polonius_safety_check {}
+                        // Safety
+                        //
+                        //   - passes polonius, _c.f._, test above
+                        ::std::mem::transmute::<
+                            Decoded<'_>,
+                            Decoded<'a>,
+                        >(result)
+                    };
+                    return Ok((new_len, result));
                 }
                 Err(err) => return Err(err)
             }
         };
-        match return_value {
-            Option::Some(x) => Ok(x),
-            Option::None => Ok((len-buf.len(), Decoded::Nothing))
-        }
+        Ok((len - buf.len(), Decoded::Nothing))
     }
     
     /// Returns the data of the last extension that has been decoded.
